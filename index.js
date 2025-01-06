@@ -17,19 +17,29 @@ app.get('/', (req, res) => {
 app.post('/generate-audio', (req, res) => {
     const { text } = req.body;
 
-    // Remove text within brackets (including the brackets themselves)
-    const cleanedText = text.replace(/\[.*?\]|\{.*?\}|\(.*?\)/g, '').trim();
-
-    const gttsInstance = new gtts(cleanedText, 'en');
-    const filePath = path.join(__dirname, 'output.mp3');
+    // Use gtts to generate audio
+    const gttsInstance = new gtts(text, 'en');
+    const filePath = path.join('/tmp', 'output.mp3'); // Use /tmp directory
 
     gttsInstance.save(filePath, (err, result) => {
         if (err) {
+            console.error('Error generating audio:', err);
             return res.status(500).send('Error generating audio');
         }
-        res.sendFile(filePath);
+        res.sendFile(filePath, {}, (err) => {
+            if (err) {
+                console.error('Error sending audio file:', err);
+                res.status(500).send('Error sending audio file');
+            } else {
+                // Optionally clean up the file after sending
+                fs.unlink(filePath, (err) => {
+                    if (err) console.error('Error deleting file:', err);
+                });
+            }
+        });
     });
 });
+
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
