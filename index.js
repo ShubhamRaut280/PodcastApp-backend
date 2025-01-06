@@ -1,6 +1,4 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
 const gtts = require('gtts');
 const cors = require('cors');
 
@@ -14,36 +12,38 @@ app.get('/', (req, res) => {
     res.send('I am live');
 });
 
-app.post('/generate-audio', (req, res) => {
+app.post('/generate-audio',async (req, res) => {
     const { text } = req.body;
 
-    // Use gtts to generate audio
-    const gttsInstance = new gtts(text, 'en');
-    const filePath = path.join('/tmp', 'output.mp3'); // Use /tmp directory
+    try {
+        // Split text into manageable chunks
+        const chunks = text.match(/[^.!?]+[.!?]+/g) || [text];
+        
+        // Set up headers for audio streaming
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Disposition', 'attachment; filename="output.mp3"');
 
-    gttsInstance.save(filePath, (err, result) => {
-        if (err) {
-            console.error('Error generating audio:', err);
-            return res.status(500).send('Error generating audio');
+        for (const chunk of chunks) {
+            const gttsInstance = new gtts(chunk, 'en');
+
+            // Generate audio and stream directly
+            await new Promise((resolve, reject) => {
+                gttsInstance.stream()
+                    .on('data', (data) => res.write(data))
+                    .on('end', resolve)
+                    .on('error', reject);
+            });
         }
-        res.sendFile(filePath, {}, (err) => {
-            if (err) {
-                console.error('Error sending audio file:', err);
-                res.status(500).send('Error sending audio file');
-            } else {
-                // Optionally clean up the file after sending
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-            }
-        });
-    });
-});
 
+        res.end(); // End the stream after all chunks are processed
+    } catch (error) {
+        console.error('Error generating audio:', error);
+        res.status(500).send('Error generating audio');
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-
-module.exports = app; 
+module.exports = app;
